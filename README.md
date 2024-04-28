@@ -20,8 +20,8 @@ https://localhost:7037/CreateLink
   "webbsite": "https://store.steampowered.com/"
 }
 
-https://localhost:7037/GetLinks/11
+https://localhost:7037/GetLinks/1
 
-https://localhost:7037/GetInterests/11
+https://localhost:7037/GetInterests/1
 
 https://localhost:7037/GetAllPersons
