@@ -1,3 +1,5 @@
+**Run Commands**
+
 https://localhost:7037/CreatePerson
 {
   "personName": "Jonas",
@@ -19,5 +21,7 @@ https://localhost:7037/CreateLink
 }
 
 https://localhost:7037/GetLinks/11
+
 https://localhost:7037/GetInterests/11
+
 https://localhost:7037/GetAllPersons
