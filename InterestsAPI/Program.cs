@@ -1,6 +1,7 @@
 
 using InterestsAPI.Data;
 using InterestsAPI.Models;
+using InterestsAPI.Models.DTO;
 using Microsoft.EntityFrameworkCore;
 
 namespace InterestsAPI
@@ -33,14 +34,14 @@ namespace InterestsAPI
             app.UseAuthorization();
 
 
-            // Return all persons with interests
-            app.MapGet("/Persons/Interests", async (ApplicationDbContext context) =>
+            // Return all persons 
+            app.MapGet("/GetAllPersons", async (ApplicationDbContext context) =>
             {
-                var persons = await context.Persons.Include(p => p.Interests) 
+                List<Person> persons = await context.Persons.Include(p => p.Interests)
                     .ThenInclude(i => i.Links) 
                     .ToListAsync();
 
-                if (persons == null || !persons.Any())
+                if (persons == null || persons.Count == 0)
                 {
                     return Results.NotFound("Hittade inga personer med intressen");
                 }
@@ -48,81 +49,106 @@ namespace InterestsAPI
                 return Results.Ok(persons);
             });
 
-            // create Person with interests
-            app.MapPost("/persons", async (Person person, ApplicationDbContext context) =>
+            // create Person 
+            app.MapPost("/CreatePerson", async (CreatePerson createPerson, ApplicationDbContext context) =>
             {
-                foreach (var interest in person.Interests)
-                {
-                    foreach (var link in interest.Links)
-                    {
-                        context.Links.Add(link);
-                    }
-                    context.Interests.Add(interest);
-                }
+                Person person = new();
+                person.Age = createPerson.Age;
+                person.PersonName = createPerson.PersonName;
+                person.PhoneNumber = createPerson.PhoneNumber;
+
                 context.Persons.Add(person);
+                await context.SaveChangesAsync();
+                return Results.Created($"/persons/{person.PersonId}", person);
+            });
+            
+            // create interest 
+            app.MapPost("/CreateInterest", async (CreateInterest createInterest, ApplicationDbContext context) =>
+            {
+                Interest interest = new();
+                interest.InterestName = createInterest.InterestName;
+                interest.InterestDescription = createInterest.InterestDescription;
+                var person = await context.Persons.FindAsync(createInterest.PersonId);
+                if (person == null)
+                {
+                    return Results.NotFound("Person not found");
+                }
+
+                // Koppla det nya intresset till personen
+                person.Interests.Add(interest);
 
                 await context.SaveChangesAsync();
 
-                return Results.Created($"/persons/{person.PersonId}", person);
-            });
-
-            // Get interests and links for a specific person
-            app.MapGet("/Interests", async (ApplicationDbContext context) =>
+                return Results.Created($"/Interest/{interest.InterestId}", interest);
+            }); 
+            
+            // create interest 
+            app.MapPost("/CreateLink", async (CreateLink createLink, ApplicationDbContext context) =>
             {
-                var interests = await context.Interests.Include(i => i.Links).ToListAsync();
-
-                if (interests == null)
+                Link link = new();
+                link.Webbsite = createLink.Webbsite;
+                Interest interest = await context.Interests.FindAsync(createLink.InterestId);
+                if (interest == null)
                 {
                     return Results.NotFound("Person not found");
+                }
+
+                // Koppla det nya intresset till personen
+                interest.Links.Add(link);
+
+                await context.SaveChangesAsync();
+
+                return Results.Created($"/Interest/{link.LinkId}", link);
+            });
+
+
+            // Get interests and links for a specific person
+            app.MapGet("/GetInterests/{personId}", async (int personId, ApplicationDbContext context) =>
+            {
+                Person? person = await context.Persons.Include(p => p.Interests).ThenInclude(i => i.Links).Where(p => p.PersonId == personId).FirstOrDefaultAsync();
+                if (person == null)
+                {
+                    return Results.NotFound("Person not found");
+                }
+
+                List<Interest>? interests = person.Interests;
+                if (interests == null)
+                {
+                    return Results.NotFound("interest not found");
+                }
+                if (interests.Count == 0)
+                {
+
+                    return Results.NotFound("Person dont have any interests");
                 }
 
                 return Results.Ok(interests);
-            });
-
-            // add more interests to a person
-            app.MapPatch("/Persons/{personId}", async (int personId, Person updatedPerson, ApplicationDbContext context) =>
+            }); 
+            
+            // Get links for a specific person
+            app.MapGet("/GetLinks/{personId}", async (int personId, ApplicationDbContext context) =>
             {
-                var existingPerson = await context.Persons.Include(p => p.Interests)
-                    .ThenInclude(i => i.Links)
-                    .FirstOrDefaultAsync(p => p.PersonId == personId);
-
-                if (existingPerson == null)
+                Person? person = await context.Persons.Include(p => p.Interests).ThenInclude(i => i.Links).Where(p => p.PersonId == personId).FirstOrDefaultAsync();
+                if (person == null)
                 {
                     return Results.NotFound("Person not found");
                 }
-                if (updatedPerson.Interests != null)
+
+                List<Interest>? interests = person.Interests;
+                if (interests == null)
                 {
-                    foreach (var updatedInterest in updatedPerson.Interests)
+                    return Results.NotFound("interest not found");
+                }
+                List<Link> links = new();
+                foreach(Interest interest in interests)
+                {
+                    if(interest.Links is not null)
                     {
-                        existingPerson.Interests.Add(updatedInterest);
+                        links.AddRange(interest.Links);
                     }
                 }
 
-                await context.SaveChangesAsync();
-
-                return Results.Ok(existingPerson);
-            });
-
-            // update a interest
-            app.MapPut("/Interests/{id:int}", async (int id, Interest updatedInterest, ApplicationDbContext context) =>
-            {
-                var existingInterest = await context.Interests.Include(i => i.Links).FirstOrDefaultAsync(i => i.InterestId == id);
-
-                if (existingInterest == null)
-                {
-                    return Results.NotFound("Interest not found");
-                }
-                existingInterest.InterestName = updatedInterest.InterestName;
-                existingInterest.InterestDescription = updatedInterest.InterestDescription;
-
-                foreach (var link in updatedInterest.Links)
-                {
-                    existingInterest.Links.Add(link);
-                }
-
-                await context.SaveChangesAsync();
-
-                return Results.Ok(existingInterest);
+                return Results.Ok(links);
             });
 
             app.Run();
